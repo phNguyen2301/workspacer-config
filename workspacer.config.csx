@@ -6,6 +6,7 @@
 #r "C:\Program Files\workspacer\plugins\workspacer.FocusIndicator\workspacer.FocusIndicator.dll"
 
 using System;
+using System.Windows.Forms;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Timers;
@@ -18,119 +19,101 @@ using workspacer.Gap;
 using workspacer.ActionMenu;
 using workspacer.FocusIndicator;
 
-
-public class WorkspaceWidget : BarWidgetBase
+public class BatteryWidget : BarWidgetBase
 {
-    public Color WorkspaceHasFocusColor { get; set; } = new Color(143, 189, 187);
-    public Color WorkspaceEmptyColor { get; set; } = Color.Gray;
-    public Color WorkspaceIndicatingBackColor { get; set; } = Color.Teal;
-    public int BlinkPeriod { get; set; } = 1000;
-
-    private Timer _blinkTimer;
-    private ConcurrentDictionary<IWorkspace, bool> _blinkingWorkspaces;
-
-    public override void Initialize()
-    {
-        Context.Workspaces.WorkspaceUpdated += () => UpdateWorkspaces();
-        Context.Workspaces.WindowMoved += (w, o, n) => UpdateWorkspaces();
-
-        _blinkingWorkspaces = new ConcurrentDictionary<IWorkspace, bool>();
-
-        _blinkTimer = new Timer(BlinkPeriod);
-        _blinkTimer.Elapsed += (s, e) => BlinkIndicatingWorkspaces();
-        _blinkTimer.Enabled = true;
-    }
+    public Color LowChargeColor { get; set; } = new Color(250, 55, 55);
+    public Color MedChargeColor { get; set; } = new Color(252,185, 15);
+    public double LowChargeThreshold { get; set; } = 0.20;
+    public double MedChargeThreshold { get; set; } = 0.50;
+    public int Interval { get; set; } = 5000;
+    private System.Timers.Timer _timer;
 
     public override IBarWidgetPart[] GetParts()
     {
-        var parts = new List<IBarWidgetPart>();
-        var workspaces = Context.WorkspaceContainer.GetWorkspaces(Context.Monitor);
-        int index = 0;
-        foreach (var workspace in workspaces)
+        PowerStatus pwr = SystemInformation.PowerStatus;
+        float currentBatteryCharge = pwr.BatteryLifePercent;
+        if (currentBatteryCharge <= LowChargeThreshold)
         {
-            parts.Add(CreatePart(workspace, index));
-            index++;
+            return Parts(Part(currentBatteryCharge.ToString("#0%")+" ", LowChargeColor, fontname: FontName));
         }
-        return parts.ToArray();
-    }
-
-    private bool WorkspaceIsIndicating(IWorkspace workspace)
-    {
-        if (workspace.IsIndicating)
+        else if (currentBatteryCharge <= MedChargeThreshold)
         {
-            if (_blinkingWorkspaces.ContainsKey(workspace))
-            {
-                _blinkingWorkspaces.TryGetValue(workspace, out bool value);
-                return value;
-            } else
-            {
-                _blinkingWorkspaces.TryAdd(workspace, true);
-                return true;
-            }
+            return Parts(Part(currentBatteryCharge.ToString("#0%")+" ", MedChargeColor, fontname: FontName));
         }
-        else if (_blinkingWorkspaces.ContainsKey(workspace))
+        else
         {
-            _blinkingWorkspaces.TryRemove(workspace, out bool _);
-        }
-        return false;
-    }
-
-    private IBarWidgetPart CreatePart(IWorkspace workspace, int index)
-    {
-        var backColor = WorkspaceIsIndicating(workspace) ? WorkspaceIndicatingBackColor : null;
-
-        return Part(GetDisplayName(workspace, index), GetDisplayColor(workspace, index), backColor, () =>
-        {
-            Context.Workspaces.SwitchMonitorToWorkspace(Context.Monitor.Index, index);
-        },
-        FontName);
-    }
-
-    private void UpdateWorkspaces()
-    {
-        MarkDirty();
-    }
-
-    protected virtual string GetDisplayName(IWorkspace workspace, int index)
-    {
-        var monitor = Context.WorkspaceContainer.GetCurrentMonitorForWorkspace(workspace);
-        var visible = Context.Monitor == monitor;
-
-        return visible ? LeftPadding + workspace.Name + RightPadding : workspace.Name;
-    }
-
-    protected virtual Color GetDisplayColor(IWorkspace workspace, int index)
-    {
-        var monitor = Context.WorkspaceContainer.GetCurrentMonitorForWorkspace(workspace);
-        if (Context.Monitor == monitor)
-        {
-            return WorkspaceHasFocusColor;
-        }
-
-        var hasWindows = workspace.ManagedWindows.Count != 0;
-        return hasWindows ? null : WorkspaceEmptyColor;
-    }
-
-    private void BlinkIndicatingWorkspaces()
-    {
-        var workspaces = _blinkingWorkspaces.Keys;
-
-        var didFlip = false;
-        foreach (var workspace in workspaces)
-        {
-            if (_blinkingWorkspaces.TryGetValue(workspace, out bool value))
-            {
-                _blinkingWorkspaces.TryUpdate(workspace, !value, value);
-                didFlip = true;
-            }
-        }
-
-        if (didFlip)
-        {
-            MarkDirty();
+            return Parts(Part(currentBatteryCharge.ToString("#0%")+" ", fontname: FontName));
         }
     }
 
+    public override void Initialize()
+    {
+        _timer = new System.Timers.Timer(Interval);
+        _timer.Elapsed += (s, e) => MarkDirty();
+        _timer.Enabled = true;
+    }
+}
+
+public class ActiveLayoutWidget : BarWidgetBase
+{
+    private System.Timers.Timer _timer;
+    public ActiveLayoutWidget() { }
+
+    public override IBarWidgetPart[] GetParts()
+    {
+        string icon = "";
+        var currentWorkspace = Context.WorkspaceContainer.GetWorkspaceForMonitor(Context.Monitor);
+        if (String.Equals(currentWorkspace.LayoutName, "full")) {
+            icon = "";
+        }
+        if (String.Equals(currentWorkspace.LayoutName, "tall")) {
+            icon = "";
+        }
+        if (String.Equals(currentWorkspace.LayoutName, "dwindle")) {
+            icon = "";
+        }
+
+        return Parts(Part(LeftPadding + icon + RightPadding, partClicked: () =>
+        {
+            Context.Workspaces.FocusedWorkspace.NextLayoutEngine();
+        }, fontname: FontName));
+    }
+
+    public override void Initialize()
+    {
+        _timer = new System.Timers.Timer(200);
+        _timer.Elapsed += (s, e) => MarkDirty();
+        _timer.Enabled = true;
+    }
+}
+
+public class StatusWidget: BarWidgetBase
+{
+    private System.Timers.Timer _timer;
+    private string _text;
+    IConfigContext _context;
+
+    public StatusWidget(IConfigContext context)
+    {
+        _context = context;
+    }
+    public override IBarWidgetPart[] GetParts()
+    {
+        if (_context.Enabled) {
+            _text = "";
+        }
+        else{
+            _text = "";
+        }
+        return Parts(Part(_text,  partClicked: () =>_context.Enabled = !_context.Enabled, fontname: FontName));
+    }
+
+    public override void Initialize()
+    {
+        _timer = new System.Timers.Timer(200);
+        _timer.Elapsed += (s, e) => MarkDirty();
+        _timer.Enabled = true;
+    }
 }
 
 public class HourIconWidget : BarWidgetBase
@@ -165,8 +148,8 @@ public class HourIconWidget : BarWidgetBase
 
 public class PomodoroWidget : BarWidgetBase
 {
-    private Timer _timer;
-    private Timer _blinkTimer;
+    private System.Timers.Timer _timer;
+    private System.Timers.Timer _blinkTimer;
     private int _pomodoroMinutes = 0;
     private int _minutesLeft = 0;
     private Boolean _overtimeBackgroundOn;
@@ -174,7 +157,7 @@ public class PomodoroWidget : BarWidgetBase
     private string _incentive;
 
 
-    public PomodoroWidget(int pomodoroMinutes = 25, Color overtimeBackgroundColor = null, string incentive = "Click to start pomodoro!")
+    public PomodoroWidget(int pomodoroMinutes = 50, Color overtimeBackgroundColor = null, string incentive = "")
     {
         _pomodoroMinutes = pomodoroMinutes;
         _incentive = incentive;
@@ -205,7 +188,7 @@ public class PomodoroWidget : BarWidgetBase
     
     private string GetMessage() {
         if (_timer.Enabled) {
-            return _minutesLeft.ToString() + " minutes left";
+            return " " + _minutesLeft.ToString() + " m";
         } else {
             return _incentive;
         }
@@ -221,7 +204,7 @@ public class PomodoroWidget : BarWidgetBase
 
     public override void Initialize()
     {
-        _timer = new Timer(60000);
+        _timer = new System.Timers.Timer(60000);
         _timer.Elapsed += (s,e) => {
             _minutesLeft -= 1;
             if (_minutesLeft <= 0) {
@@ -231,7 +214,7 @@ public class PomodoroWidget : BarWidgetBase
         };
         _timer.Stop();
 
-        _blinkTimer = new Timer(1000);
+        _blinkTimer = new System.Timers.Timer(1000);
         _blinkTimer.Elapsed += (s,e) => {
             _overtimeBackgroundOn = !_overtimeBackgroundOn;
             MarkDirty();
@@ -255,15 +238,14 @@ public class PomodoroWidget : BarWidgetBase
     }
 }
 
-
-
 Action<IConfigContext> doConfig = (context) =>
 {
 /* Variables */
-    var fontSize = 13;
-    var barHeight = 25;
-    var fontName = "FiraCode NFM";
-    var background = new Color(10, 12, 18);
+    var fontSize = 10;
+    var barHeight = 22;
+    var fontName = "FiraCode Nerd Font Mono";
+    var background = new Color(25, 25, 25);
+    var foreground = new Color(255, 255, 255);
 
 /* Config */
     context.CanMinimizeWindows = true;
@@ -277,57 +259,58 @@ Action<IConfigContext> doConfig = (context) =>
     var gapPlugin = context.AddGap(new GapPluginConfig() { InnerGap = gap, OuterGap = gap / 2, Delta = gap / 2 });
 
 /* Bar */  
+     var leftWidgets = () => new IBarWidget[]
+    {
+        new TextWidget("|"),
+        new WorkspaceWidget()
+        {
+            WorkspaceHasFocusColor = new Color(55, 120, 246),
+            WorkspaceEmptyColor = new Color(60, 67, 87),
+            WorkspaceIndicatingBackColor = new Color(55, 91, 169),
+        },
+    };
+
+    var rightWidgets = () => new IBarWidget[]
+    {
+        new PomodoroWidget(),
+        new TextWidget("|"),
+        new HourIconWidget(),
+        new TimeWidget(1000, "HH:mm"),
+        new TextWidget("|"),
+        new BatteryWidget(),
+        new TextWidget("|"),
+        new ActiveLayoutWidget(),
+        new TextWidget("|"),
+        new StatusWidget(context),
+        new TextWidget("|"),
+    };
     context.AddBar(new BarPluginConfig()
     {
         FontSize = fontSize,
         BarHeight = barHeight,
         FontName = fontName,
         DefaultWidgetBackground = background,
-        LeftWidgets = () => new IBarWidget[]
-        {
-            new WorkspaceWidget(), 
-        },
-        RightWidgets = () => new IBarWidget[]
-        {
-            // new BatteryWidget(),
-            new PomodoroWidget(),
-            new HourIconWidget(),
-            new TimeWidget(1000, "HH:mm"),
-            // new ActiveLayoutWidget(),
-        }
+        DefaultWidgetForeground = foreground,
+        LeftWidgets =leftWidgets,
+        RightWidgets = rightWidgets,
     });
 /* Bar focus indicator */
     context.AddFocusIndicator( new FocusIndicatorPluginConfig() {
         BorderColor = background,
         BorderSize = 10,
-        TimeToShow = 200,
+        TimeToShow = 1000,
     });
 
 /* Default layouts */
-    Func<ILayoutEngine[]> defaultLayouts = () => new ILayoutEngine[]
+    var defaultLayouts = () => new ILayoutEngine[]
     {
         new DwindleLayoutEngine(),
         new TallLayoutEngine(),
         new FullLayoutEngine(),
     };
     context.DefaultLayouts = defaultLayouts;
-
-/* Workspaces */
-    // Array of workspace names and their layouts
-    (string, ILayoutEngine[])[] workspaces =
-    {
-        ("[ main]", defaultLayouts()),
-        ("[ code]", defaultLayouts()),
-        ("[ todo]", new ILayoutEngine[] { new TallLayoutEngine() }),
-        ("[ music]", defaultLayouts()),
-        ("[ other]", defaultLayouts()),
-    };
-    foreach ((string name, ILayoutEngine[] layouts) in workspaces)
-    {
-        context.WorkspaceContainer.CreateWorkspace(name, layouts);
-    }
+    context.WorkspaceContainer.CreateWorkspaces("", "", "", "");
 /* Action Menu */
-
 
 /* SubMenu */
     // Add "log off" menu to action menu (Alt + P)
@@ -374,54 +357,54 @@ Action<IConfigContext> doConfig = (context) =>
         () => context.Workspaces.SwitchFocusedMonitorToMouseLocation());
 
     // Toogle
-    manager.Subscribe(win, Keys.Escape,
+    manager.Subscribe(win, workspacer.Keys.Escape,
         () => context.Enabled = !context.Enabled, "toggle enable/disable");
     
     // Workspace
-    manager.Subscribe(win, Keys.D1, 
+    manager.Subscribe(win, workspacer.Keys.D1, 
         () => context.Workspaces.SwitchToWorkspace(0), "switch to workspace 1");
-    manager.Subscribe(win, Keys.D2, 
+    manager.Subscribe(win, workspacer.Keys.D2, 
         () => context.Workspaces.SwitchToWorkspace(1), "switch to workspace 2");
-    manager.Subscribe(win, Keys.D3, 
+    manager.Subscribe(win, workspacer.Keys.D3, 
         () => context.Workspaces.SwitchToWorkspace(2), "switch to workspace 3");
-    manager.Subscribe(win, Keys.D4, 
+    manager.Subscribe(win, workspacer.Keys.D4, 
         () => context.Workspaces.SwitchToWorkspace(3), "switch to workspace 4");
-    manager.Subscribe(win, Keys.D5, 
+    manager.Subscribe(win, workspacer.Keys.D5, 
         () => context.Workspaces.SwitchToWorkspace(4), "switch to workspace 5");
 
-    manager.Subscribe(winShift, Keys.D1, 
+    manager.Subscribe(winShift, workspacer.Keys.D1, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(0), "switch focused window to workspace 1");
-    manager.Subscribe(winShift, Keys.D2, 
+    manager.Subscribe(winShift, workspacer.Keys.D2, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(1), "switch focused window to workspace 2");
-    manager.Subscribe(winShift, Keys.D3, 
+    manager.Subscribe(winShift, workspacer.Keys.D3, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(2), "switch focused window to workspace 3");
-    manager.Subscribe(winShift, Keys.D4, 
+    manager.Subscribe(winShift, workspacer.Keys.D4, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(3), "switch focused window to workspace 4");
-    manager.Subscribe(winShift, Keys.D5, 
+    manager.Subscribe(winShift, workspacer.Keys.D5, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(4), "switch focused window to workspace 5");
 
     // H, L keys
-    manager.Subscribe(winShift, Keys.H, 
+    manager.Subscribe(winShift, workspacer.Keys.H, 
         () => context.Workspaces.FocusedWorkspace.ShrinkPrimaryArea(), "shrink primary area");
-    manager.Subscribe(winShift, Keys.L, 
+    manager.Subscribe(winShift, workspacer.Keys.L, 
         () => context.Workspaces.FocusedWorkspace.ExpandPrimaryArea(), "expand primary area");
 
     // K, J keys
-    manager.Subscribe(winShift, Keys.K, 
+    manager.Subscribe(winShift, workspacer.Keys.K, 
         () => context.Workspaces.FocusedWorkspace.SwapFocusAndNextWindow(), "swap focus and next window");
-    manager.Subscribe(winShift, Keys.J, 
+    manager.Subscribe(winShift, workspacer.Keys.J, 
         () => context.Workspaces.FocusedWorkspace.SwapFocusAndPreviousWindow(), "swap focus and previous window");
-    manager.Subscribe(win, Keys.K, 
+    manager.Subscribe(win, workspacer.Keys.K, 
         () => context.Workspaces.FocusedWorkspace.FocusNextWindow(), "focus next window");
-    manager.Subscribe(win, Keys.J, 
+    manager.Subscribe(win, workspacer.Keys.J, 
         () => context.Workspaces.FocusedWorkspace.FocusPreviousWindow(), "focus previous window");
 
     // Other shortcuts
-    manager.Subscribe(winShift, Keys.P, 
+    manager.Subscribe(winShift, workspacer.Keys.P, 
         () => actionMenu.ShowDefault(), "open action menu");
-    manager.Subscribe(winShift, Keys.Escape, 
+    manager.Subscribe(winShift, workspacer.Keys.Escape, 
         () => context.Enabled = !context.Enabled, "toggle enabled/disabled");
-    manager.Subscribe(winShift, Keys.I, 
+    manager.Subscribe(winShift, workspacer.Keys.I, 
         () => context.ToggleConsoleWindow(), "toggle console window");
 
 };
