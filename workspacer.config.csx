@@ -91,7 +91,7 @@ public class StatusWidget: BarWidgetBase
 {
     private System.Timers.Timer _timer;
     private string _text;
-    IConfigContext _context;
+    private IConfigContext _context;
 
     public StatusWidget(IConfigContext context)
     {
@@ -296,9 +296,8 @@ Action<IConfigContext> doConfig = (context) =>
     });
 /* Bar focus indicator */
     context.AddFocusIndicator( new FocusIndicatorPluginConfig() {
-        BorderColor = background,
+        BorderColor = new Color(55, 120, 246),
         BorderSize = 10,
-        TimeToShow = 1000,
     });
 
 /* Default layouts */
@@ -341,12 +340,25 @@ Action<IConfigContext> doConfig = (context) =>
     subMenu.Add("shutdown", () => System.Diagnostics.Process.Start("CMD.exe", shutdownCmd));
     subMenu.Add("restart", () => System.Diagnostics.Process.Start("CMD.exe", restartCmd));
     actionMenu.DefaultMenu.AddMenu("log off", subMenu);
-
+/* Filter */
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Genshin Impact"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Riot"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("League of Legends"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Snipping"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Discovered"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("% complete"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Info"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Warning"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Setup"));
+    context.WindowRouter.AddFilter((window) => !window.Title.Contains("Shut Down"));
+    
 /* Keybindings */
 
+    KeyModifiers altShift = KeyModifiers.Alt | KeyModifiers.Shift;
     KeyModifiers winShift = KeyModifiers.Win | KeyModifiers.Shift;
+    KeyModifiers altCtrl = KeyModifiers.Alt | KeyModifiers.Control;
     KeyModifiers winCtrl = KeyModifiers.Win | KeyModifiers.Control;
-    KeyModifiers win = KeyModifiers.Win;
+    KeyModifiers alt = KeyModifiers.Alt;
 
     IKeybindManager manager = context.Keybinds;
 
@@ -356,56 +368,43 @@ Action<IConfigContext> doConfig = (context) =>
     manager.Subscribe(MouseEvent.LButtonDown,
         () => context.Workspaces.SwitchFocusedMonitorToMouseLocation());
 
-    // Toogle
-    manager.Subscribe(win, workspacer.Keys.Escape,
-        () => context.Enabled = !context.Enabled, "toggle enable/disable");
-    
     // Workspace
-    manager.Subscribe(win, workspacer.Keys.D1, 
+    manager.Subscribe(alt, workspacer.Keys.D1, 
         () => context.Workspaces.SwitchToWorkspace(0), "switch to workspace 1");
-    manager.Subscribe(win, workspacer.Keys.D2, 
+    manager.Subscribe(alt, workspacer.Keys.D2, 
         () => context.Workspaces.SwitchToWorkspace(1), "switch to workspace 2");
-    manager.Subscribe(win, workspacer.Keys.D3, 
+    manager.Subscribe(alt, workspacer.Keys.D3, 
         () => context.Workspaces.SwitchToWorkspace(2), "switch to workspace 3");
-    manager.Subscribe(win, workspacer.Keys.D4, 
+    manager.Subscribe(alt, workspacer.Keys.D4, 
         () => context.Workspaces.SwitchToWorkspace(3), "switch to workspace 4");
-    manager.Subscribe(win, workspacer.Keys.D5, 
+    manager.Subscribe(alt, workspacer.Keys.D5, 
         () => context.Workspaces.SwitchToWorkspace(4), "switch to workspace 5");
 
-    manager.Subscribe(winShift, workspacer.Keys.D1, 
+    manager.Subscribe(altShift, workspacer.Keys.D1, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(0), "switch focused window to workspace 1");
-    manager.Subscribe(winShift, workspacer.Keys.D2, 
+    manager.Subscribe(altShift, workspacer.Keys.D2, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(1), "switch focused window to workspace 2");
-    manager.Subscribe(winShift, workspacer.Keys.D3, 
+    manager.Subscribe(altShift, workspacer.Keys.D3, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(2), "switch focused window to workspace 3");
-    manager.Subscribe(winShift, workspacer.Keys.D4, 
+    manager.Subscribe(altShift, workspacer.Keys.D4, 
         () => context.Workspaces.MoveFocusedWindowToWorkspace(3), "switch focused window to workspace 4");
-    manager.Subscribe(winShift, workspacer.Keys.D5, 
+    manager.Subscribe(altShift, workspacer.Keys.D5,
         () => context.Workspaces.MoveFocusedWindowToWorkspace(4), "switch focused window to workspace 5");
 
     // H, L keys
-    manager.Subscribe(winShift, workspacer.Keys.H, 
+    manager.Subscribe(altCtrl, workspacer.Keys.H, 
         () => context.Workspaces.FocusedWorkspace.ShrinkPrimaryArea(), "shrink primary area");
-    manager.Subscribe(winShift, workspacer.Keys.L, 
+    manager.Subscribe(altCtrl, workspacer.Keys.L, 
         () => context.Workspaces.FocusedWorkspace.ExpandPrimaryArea(), "expand primary area");
 
     // K, J keys
-    manager.Subscribe(winShift, workspacer.Keys.K, 
-        () => context.Workspaces.FocusedWorkspace.SwapFocusAndNextWindow(), "swap focus and next window");
-    manager.Subscribe(winShift, workspacer.Keys.J, 
-        () => context.Workspaces.FocusedWorkspace.SwapFocusAndPreviousWindow(), "swap focus and previous window");
-    manager.Subscribe(win, workspacer.Keys.K, 
+    manager.Subscribe(altCtrl, workspacer.Keys.K, 
         () => context.Workspaces.FocusedWorkspace.FocusNextWindow(), "focus next window");
-    manager.Subscribe(win, workspacer.Keys.J, 
+    manager.Subscribe(altCtrl, workspacer.Keys.J, 
         () => context.Workspaces.FocusedWorkspace.FocusPreviousWindow(), "focus previous window");
 
     // Other shortcuts
-    manager.Subscribe(winShift, workspacer.Keys.P, 
+    manager.Subscribe(altShift, workspacer.Keys.P, 
         () => actionMenu.ShowDefault(), "open action menu");
-    manager.Subscribe(winShift, workspacer.Keys.Escape, 
-        () => context.Enabled = !context.Enabled, "toggle enabled/disabled");
-    manager.Subscribe(winShift, workspacer.Keys.I, 
-        () => context.ToggleConsoleWindow(), "toggle console window");
-
 };
 return doConfig;
